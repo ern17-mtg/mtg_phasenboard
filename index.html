@@ -118,14 +118,12 @@ try{const l=JSON.parse(localStorage.mtgLast||"null");if(l){$("name").value=l.nam
 function T(fn){ref.transaction(s=>{if(!s)return s;fn(s);return s})}
 const cur=s=>s&&s.started?Math.max(0,Math.floor(((s.pausedAt||now())-s.turnStart)/1000)):0;
 
-// Ermittelt welcher Spieler gerade aktiv die Uhr laufen hat
 function currentClockHolder(s) {
   if(!s || !s.started) return null;
   if(s.prio && s.prio.taker != null) return s.prio.taker;
   return s.active;
 }
 
-// Bucht die verstreichende Zeit ab und setzt die Zeituhr auf JETZT zurück
 function commitTime(s) {
   const holder = currentClockHolder(s);
   if(holder != null) {
@@ -159,7 +157,7 @@ function startPhasePrio(s, targetPhase, targetAction, NP) {
 }
 
 function closePrio(s, NP){
-  if(s.prio.ctx === "phase"){
+  if(s.prio && s.prio.ctx === "phase"){
     const tp = s.prio.targetPhase;
     const ta = s.prio.targetAction;
     s.prio = null;
@@ -173,11 +171,6 @@ function closePrio(s, NP){
       s.turnStart = now();
       s.pausedAt = null;
     }
-  } else if(s.prio.ctx === "c"){
-    s.check = false;
-    s.cs++;
-    if(s.cs > 4) s.cs = 5;
-    s.prio = null;
   } else {
     s.prio = null;
   }
@@ -211,10 +204,12 @@ function A(a,x){T(s=>{
     s.cs = 5;
   }
   else if(a==="cstep"&&act&&det&&s.p===4&&s.cs>=0&&s.cs<=4&&!s.prio){
-    s.check=true;s.prio={ctx:"c",votes:{}}
+    s.check=true;
+    startPhasePrio(s, s.p, "cstep", NP);
   }
   else if(a==="give"&&act&&det&&!s.prio) {
-    s.prio={ctx:"g",votes:{}}
+    // Startet die reihum Prioritätsabfrage
+    startPhasePrio(s, s.p, "give", NP);
   }
   else if(a==="vote"&&s.prio&&!act){
     if(s.prio.ctx === "phase") {
@@ -226,35 +221,21 @@ function A(a,x){T(s=>{
             closePrio(s, NP);
           }
         } else if(x === "take") {
-          commitTime(s); // Zeit des Spielers am Zug stopen
-          s.prio.taker = m; // Zeit läuft ab sofort für den Taker
-        }
-      }
-    } else if(s.prio.taker == null) {
-      const v=s.prio.votes=s.prio.votes||{};v[m]=x;
-      const o=[...Array(NP).keys()].filter(i=>i!==s.active);
-      if(o.every(i=>v[i])){
-        const t=o.find(i=>v[i]==="take");
-        if(t!==undefined) {
           commitTime(s);
-          s.prio.taker=t;
-        } else closePrio(s, NP);
+          s.prio.taker = m;
+        }
       }
     }
   }
   else if(a==="done"&&s.prio&&s.prio.taker===m){
-    commitTime(s); // Genommene Zeit auf das Konto des Takers buchen
+    commitTime(s);
     delete s.prio.taker;
 
     if(s.prio.ctx === "phase") {
-      // Priorität geht weiter an den nächsten Spieler in der Phase
       s.prio.currentIdx++;
       if(s.prio.currentIdx >= s.prio.queue.length) {
         closePrio(s, NP);
       }
-    } else {
-      // Manuelle Priorität aufgelöst
-      s.prio.votes={};
     }
   }
   else if(a==="end"&&act&&!s.prio&&(!det||s.p>=7)){
@@ -314,16 +295,8 @@ function render(){
                 <button class="btn gray" onclick="A('vote','pass')">Passen</button>
               </div>`;
       } else {
-        h += `<div class="hint">Phasenwechsel-Check: Warte auf ${names[activePrioSeat]} …</div>`;
+        h += `<div class="hint">Prioritätsabfrage: Warte auf ${names[activePrioSeat]} …</div>`;
       }
-    } else {
-      const v=pr.votes||{},o=[...Array(NP).keys()].filter(i=>i!==S.active);
-      if(pr.taker!=null){
-        h+=me===pr.taker?`<div class="alert">Du hast die Priorität – spiele deinen Zauber / deine Antwort! (Deine Zeit läuft)</div><button class="btn big" onclick="A('done')">Fertig – alles aufgelöst</button>`
-          :`<div class="hint">${names[pr.taker]} handelt gerade … (Zeit läuft für ${names[pr.taker]})</div>`;
-      }else if(!act&&!v[me]){
-        h+=`<div class="alert">Gegner-Priorität! Hat jemand Spontanzauber / Antworten / Trigger?</div><div class="center"><button class="btn" onclick="A('vote','take')">Priorität nehmen</button><button class="btn gray" onclick="A('vote','pass')">Passen</button></div>`;
-      }else h+=`<div class="hint">Warte auf Antworten (${o.filter(i=>v[i]).length}/${o.length})</div>`;
     }
   }
   
@@ -348,7 +321,7 @@ function tick(){
   const t=names.map((n,i)=>{
     const b=(S.ptime&&S.ptime[i])||0;
     tot+=b;
-    return b+(S.started&&i===clockHolder?c:0);
+    return b+(S.started&&clockHolder===i?c:0);
   });
   
   $("timer").textContent=fmt(tot);
