@@ -50,7 +50,7 @@ input{width:100%;margin:6px 0;padding:12px;border-radius:10px;border:0;backgroun
 </head>
 <body>
 <div class="board">
-  <h1>Magic</h1>
+  <h1>Magic v2</h1>
   <div id="lobby">
     <input id="name" placeholder="Dein Name" maxlength="14">
     <input id="code" placeholder="Raumcode (z. B. DRAGON)" maxlength="10" autocapitalize="characters">
@@ -107,7 +107,7 @@ function join(create){
     return s;
   },(err,ok)=>{
     r.off("value",keep);
-    if(err||!ok)return msg(create?"Dieser Raumcode existiert schon. Nimm „Raum beitreten“ oder einen anderen Code.":"Beitritt nicht möglich: Der Raum existiert nicht (Code prüfen) oder ist mit 4 Spielern voll.");
+    if(err||!ok)return msg((create?"Dieser Raumcode existiert schon.":"Beitritt nicht möglich: Raum nicht gefunden oder voll.")+" ["+(err?err.message:"abgebrochen, ok="+ok)+"]");
     room=code;ref=r;localStorage.mtgLast=JSON.stringify({name:name,code:code});
     $("lobby").hidden=true;$("game").hidden=false;$("roomtag").textContent=code;
     r.on("value",x=>{S=x.val();render()});
