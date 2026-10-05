@@ -118,12 +118,14 @@ try{const l=JSON.parse(localStorage.mtgLast||"null");if(l){$("name").value=l.nam
 function T(fn){ref.transaction(s=>{if(!s)return s;fn(s);return s})}
 const cur=s=>s&&s.started?Math.max(0,Math.floor(((s.pausedAt||now())-s.turnStart)/1000)):0;
 function resetTurn(s){s.p=0;s.land=false;s.lock=false;s.cs=-1;s.check=false;s.prio=null}
-function advance(s){if((s.p===3||s.p===5)&&!s.land)s.lock=true;s.p++;if(s.p===4){s.cs=0;s.check=false}}
+function advance(s){if(s.p===5&&!s.land)s.lock=true;s.p++;if(s.p===4){s.cs=0;s.check=false}}
 function closePrio(s){if(s.prio.ctx==="c"){s.check=false;s.cs++;if(s.cs>4)s.cs=5}s.prio=null}
+const ord=(s,NP)=>{const o=(s.order||[]).filter(i=>i<NP);for(let i=0;i<NP;i++)if(!o.includes(i))o.push(i);return o};
 
 function A(a,x){T(s=>{
   const m=s.players[uid].seat,act=m===s.active,NP=Object.keys(s.players).length,det=s.round>=3;
-  if(a==="start"&&!s.started&&NP>=2){s.started=true;s.round=1;s.active=0;s.ptime=[0,0,0,0];resetTurn(s);s.turnStart=now();s.pausedAt=null}
+  if(a==="start"&&!s.started&&NP>=2){const o=ord(s,NP);s.order=o;s.started=true;s.round=1;s.active=o[0];s.ptime=[0,0,0,0];resetTurn(s);s.turnStart=now();s.pausedAt=null}
+  else if((a==="up"||a==="down")&&!s.started){const o=ord(s,NP),j=a==="up"?x-1:x+1;if(j>=0&&j<NP){const t=o[x];o[x]=o[j];o[j]=t;s.order=o}}
   else if(a==="pause"&&s.started){if(s.pausedAt){s.turnStart+=now()-s.pausedAt;s.pausedAt=null}else s.pausedAt=now()}
   else if(a==="adv"&&act&&det&&!s.prio&&s.p<7&&!(s.p===4&&s.cs<5))advance(s);
   else if(a==="land"&&act&&det&&(s.p===3||s.p===5)&&!s.land&&!s.lock)s.land=true;
@@ -137,7 +139,7 @@ function A(a,x){T(s=>{
   else if(a==="done"&&s.prio&&s.prio.taker===m){s.prio.votes={};delete s.prio.taker}
   else if(a==="end"&&act&&!s.prio&&(!det||s.p>=7)){
     s.ptime[s.active]=(s.ptime[s.active]||0)+cur(s);
-    s.active++;if(s.active>=NP){s.active=0;s.round++}
+    const o=ord(s,NP),n=(o.indexOf(s.active)+1)%NP;s.active=o[n];if(n===0)s.round++;
     resetTurn(s);s.turnStart=now();s.pausedAt=null;
   }
 })}
@@ -148,7 +150,8 @@ function render(){
   const NP=names.length,me=P[uid].seat;
   $("pauseBtn").textContent=S.pausedAt?"Resume":"Pause";
   if(!S.started){
-    $("play").innerHTML=`<div class="hint">Im Raum <b>${esc(room)}</b>: ${names.join(", ")}<br>Mitspieler können mit diesem Code beitreten (max. 4).</div><button class="btn big" onclick="A('start')" ${NP<2?"disabled":""}>Spiel starten</button>`;
+        const o=ord(S,NP);
+    $("play").innerHTML=`<div class="hint">Im Raum <b>${esc(room)}</b>. Mitspieler können mit diesem Code beitreten (max. 4).<br>Lege die Zugreihenfolge fest:</div>`+o.map((seat,i)=>`<div class="bar"><span class="name">${i+1}. ${names[seat]}</span><span><button class="btn gray" ${i===0?"disabled":""} onclick="A('up',${i})">▲</button><button class="btn gray" ${i===NP-1?"disabled":""} onclick="A('down',${i})">▼</button></span></div>`).join("")+`<button class="btn big" onclick="A('start')" ${NP<2?"disabled":""}>Spiel starten</button>`;
     tick();return;
   }
   const act=me===S.active,det=S.round>=3,pr=S.prio,ctl=act&&!pr&&!S.pausedAt;
